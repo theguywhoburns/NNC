@@ -76,6 +76,48 @@ bool IsNewLine(char c) {
 	return false;
 }
 
+#if _DEBUG
+	// Will write the token type to the buffer
+	void token_type_to_string(token token, char buffer[32]) {
+		if(IS_BRACKET(token)) {
+			bool open = IS_OPEN(token);
+			switch(token.type & 0b01100000) {
+				case TOKEN_PAREN:  strcpy(buffer, open ? "PARENTESIS OPEN"	: "PARENTESIS CLOSED");	break;
+				case TOKEN_SQUARE: strcpy(buffer, open ? "SQUARE OPEN"			: "SQUARE CLOSED"); 		break;
+				case TOKEN_CURLY:  strcpy(buffer, open ? "CURLY OPEN" 			: "CURLY CLOSED"); 			break;
+				case TOKEN_ANGLE:  strcpy(buffer, open ? "ANGLE OPEN"				: "ANGLE CLOSED"); 			break;
+				default: assert(false && "Unknown token type... or the universe is going to explode\n");
+			}
+			return;
+			int i = 10;
+			switch(i) {
+				case 10: 
+					printf("10 and ");
+				case 11: 
+					printf("11\n"); // will be executed both in 10 and 11
+					break;
+				default: // will not be called
+					printf("default\n");
+				break;
+			}
+		} else if(IS_IDENTIFIER(token)) {
+			strcpy(buffer, "IDENTIFIER");
+		} else if(IS_NUMBER(token)) {
+			strcpy(buffer, "NUMBER");
+		} else if(IS_STRING(token)) {
+			strcpy(buffer, "STRING");
+		} else if(IS_SPECIAL(token)) {	
+			strcpy(buffer, "SPECIAL");
+		} else if(token.type == 0b11111111) {
+			strcpy(buffer, "preprocessor... ignore it");
+		} else if(token.type == TOKEN_EOF) {
+			strcpy(buffer, "EOF");
+		} else {
+			assert(false && "Unknown token type... or the universe is going to explode lol\n");	
+		}
+	}
+#endif
+
 token_stream *token_stream_create(const char* path) {
 	token_stream* ret = malloc(sizeof(token_stream));
 	if(ret == NULL) {
@@ -89,6 +131,19 @@ token_stream *token_stream_create(const char* path) {
 		free(ret); 
 		return NULL;
 	}
+	#if _DEBUG
+		char* new_filename = malloc(strlen(path) + 11);
+		sprintf(new_filename, "%s.lexer_out", path);
+		ret->debug_lexer_file = fopen(new_filename, "w");
+		if(ret->debug_lexer_file == NULL) {
+			printf("[token_stream_create]: Failed to open %s\n", new_filename);
+			free(ret);
+			free(new_filename);
+			fclose(file);
+			return NULL;
+		}
+		free(new_filename);
+	#endif
 	fseek(file, 0, SEEK_END);
 	ret->file_size = ftell(file);
 	fseek(file, 0, SEEK_SET);
@@ -119,6 +174,14 @@ token token_stream_next(token_stream* ts) {
 	token ret = ts->last;
 	if(ret.type == TOKEN_EOF) { return ret; } // EOF
 	ts->last = lex_token(ts);
+	#if _DEBUG
+		char _buffer[32] = {0};
+		token_type_to_string(ret, _buffer);
+		char* buffer = malloc(strlen(ret.value) + 256);
+		sprintf(buffer, "[%s:%zu:%zu]: %.*s\n", _buffer, ret.line, ret.column, (int)ret.length, ret.value);
+		fwrite(buffer, strlen(buffer), 1, ts->debug_lexer_file);
+		free(buffer);
+	#endif 
 	return ret;
 }
 

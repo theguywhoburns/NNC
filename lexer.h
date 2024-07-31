@@ -25,7 +25,7 @@
 
 #define TOKEN_PREPROCESSOR	0b11111111
 
-#define IS_BRACKET_(token_type)			(((token_type) & TOKEN_BRACKET) == TOKEN_BRACKET)
+#define IS_BRACKET_(token_type)			(((token_type) & 0b00000111) == TOKEN_BRACKET)
 #define IS_PAREN_(token_type)				(((token_type) & 0b01100000) == TOKEN_PAREN)
 #define IS_SQUARE_(token_type)			(((token_type) & 0b01100000) == TOKEN_SQUARE)
 #define IS_CURLY_(token_type)				(((token_type) & 0b01100000) == TOKEN_CURLY)
@@ -71,17 +71,25 @@ typedef struct token {
 } token;
 
 typedef struct token_stream {
+	/// @brief returns ts->last and lexes new token
+	token  (*next)(struct token_stream*);
+	/// @brief returns ts->last
+	token  (*peek)(struct token_stream*);
+	void(*destroy)(struct token_stream*);
 	size_t line;
 	size_t column;
 	char* file_source;
 	size_t file_size;
 	size_t file_index;
 	token last;
-	/// @brief returns ts->last and lexes new token
-	token  (*next)(struct token_stream*);
-	/// @brief returns ts->last
-	token  (*peek)(struct token_stream*);
-	void(*destroy)(struct token_stream*);
+	#if _DEBUG
+		FILE* debug_lexer_file;
+	#endif
 } token_stream;
 
 token_stream *token_stream_create(const char* path);
+
+#if _DEBUG
+	// Will write the token type to the buffer
+	void token_type_to_string(token token, char buffer[32]);
+#endif
