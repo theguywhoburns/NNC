@@ -1,6 +1,5 @@
 /.vscode
 /build
-a.exe
 /bin/NNC.exe
 /bin/NNC.pdb
 /bin/main.nnc.lexer_out
