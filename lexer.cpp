@@ -17,6 +17,7 @@ TokenStream::TokenStream(const std::string& path) {
 
 TokenStream::~TokenStream() {
 #if _DEBUG
+  debug_lexer_file.flush();
   debug_lexer_file.close();
 #endif
 }
@@ -39,26 +40,32 @@ Token TokenStream::peek() {
 
 std::string TokenStream::token_type_to_string(Token::Type type) {
   switch (type) {
-  case Token::Type::TOKEN_EOF: return "EOF";
-  case Token::Type::TOKEN_OPAREN: return "OPEN PAREN";
-  case Token::Type::TOKEN_CPAREN: return "CLOSE PAREN";
-  case Token::Type::TOKEN_OSQUARE: return "OPEN SQUARE";
-  case Token::Type::TOKEN_CSQUARE: return "CLOSE SQUARE";
-  case Token::Type::TOKEN_OCURLY: return "OPEN CURLY";
-  case Token::Type::TOKEN_CCURLY: return "CLOSE CURLY";
-  case Token::Type::TOKEN_OANGLE: return "OPEN ANGLE";
-  case Token::Type::TOKEN_CANGLE: return "CLOSE ANGLE";
-  case Token::Type::TOKEN_IDENTIFIER: return "IDENTIFIER";
-  case Token::Type::TOKEN_NUMBER: return "NUMBER";
-  case Token::Type::TOKEN_STRING: return "STRING";
-  case Token::Type::TOKEN_SPECIAL: return "SPECIAL";
+  case Token::Type::TOKEN_EOF:          return "EOF";
+  case Token::Type::TOKEN_OPAREN:       return "OPEN_PAREN";
+  case Token::Type::TOKEN_OSQUARE:      return "OPEN_SQUARE";
+  case Token::Type::TOKEN_OCURLY:       return "OPEN_CURLY";
+  case Token::Type::TOKEN_OANGLE:       return "OPEN_ANGLE";
+  case Token::Type::TOKEN_CPAREN:       return "CLOSE_PAREN";
+  case Token::Type::TOKEN_CSQUARE:      return "CLOSE_SQUARE";
+  case Token::Type::TOKEN_CCURLY:       return "CLOSE_CURLY";
+  case Token::Type::TOKEN_CANGLE:       return "CLOSE_ANGLE";
+  case Token::Type::TOKEN_IDENTIFIER:   return "IDENTIFIER";
+  case Token::Type::TOKEN_NUMBER:       return "NUMBER";
+  case Token::Type::TOKEN_STRING:       return "STRING";
+  case Token::Type::TOKEN_SPECIAL:      return "SPECIAL";
   case Token::Type::TOKEN_PREPROCESSOR: return "PREPROCESSOR";
   default: return "UNKNOWN";
   }
 }
 
 Token TokenStream::lex_new() {
-  while (file_index < file_source.size() && (file_source[file_index] == ' ' || file_source[file_index] == '\t' || file_source[file_index] == '\n' || file_source[file_index] == '\r' || file_source[file_index] == '/')) {
+  while (file_index < file_source.size() && ( 
+    file_source[file_index] == ' '  || 
+    file_source[file_index] == '\t' || 
+    file_source[file_index] == '\n' || 
+    file_source[file_index] == '\r' || 
+    file_source[file_index] == '/'
+  )) {
     switch (file_source[file_index]) {
     case ' ':
     case '\t':
@@ -66,7 +73,6 @@ Token TokenStream::lex_new() {
       break;
     case '\n':
       line++;
-      column = 1;
       break;
     case '\r':
       column = 1;
@@ -120,13 +126,14 @@ Token TokenStream::lex_new() {
   case '&':
   case '|':
   case '^':
-  case '~':
   case '!':
   case '?':
   case ':':
   case ',':
   case '.':
   case ';':
+  case '`':
+  case '~':
     return Token(Token::Type::TOKEN_SPECIAL, std::string_view(&file_source[file_index++], 1), line, column++);
   case '"':
   case '\'':
@@ -197,6 +204,9 @@ Token TokenStream::lex_identifier() {
 Token TokenStream::lex_preprocessor() {
   size_t start_index = file_index;
   size_t start_column = column;
+  if(this->last.line == this->line) {
+    throw std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Preprocessor directive must be on a new line");
+  }
   while (file_index < file_source.size() && file_source[file_index] != '\n') {
     file_index++;
     column++;
@@ -205,7 +215,6 @@ Token TokenStream::lex_preprocessor() {
 }
 
 bool TokenStream::IsSpecialChar(char c) {
-  // TODO: Implement IsSpecialChar
   static const std::string special_chars = "!\"$%&'*+,-./:;=?@\\^|~";
   return special_chars.find(c) != std::string::npos;
 }

@@ -34,9 +34,9 @@ public:
   Token(Type type, std::string_view value, size_t line, size_t column)
     : type(type), value(value), line(line), column(column) {}
   Type type;
-  std::string_view value;
   size_t line;
   size_t column;
+  std::string_view value;
 };
 
 class TokenStream {
