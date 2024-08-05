@@ -202,16 +202,17 @@ Token TokenStream::lex_identifier() {
 }
 
 Token TokenStream::lex_preprocessor() {
-  size_t start_index = file_index;
-  size_t start_column = column;
   if(this->last.line == this->line) {
     throw std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Preprocessor directive must be on a new line");
   }
+  size_t start_index = file_index;
+  size_t start_column = column;
   while (file_index < file_source.size() && file_source[file_index] != '\n') {
     file_index++;
     column++;
-  }
-  return Token(Token::Type::TOKEN_PREPROCESSOR, std::string_view(&file_source[start_index], file_index - start_index - 1), line, start_column);
+  } 
+  std::string_view view = std::string_view(&file_source[start_index], file_index - start_index - ((file_source[file_index] == '\n' || file_source[file_index] == '\r') ? 1 : 0));
+  return Token(Token::Type::TOKEN_PREPROCESSOR, view, line, start_column);
 }
 
 bool TokenStream::IsSpecialChar(char c) {
