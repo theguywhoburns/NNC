@@ -2,36 +2,26 @@
 
 TokenStream::TokenStream(const std::string& path) {
 #if _DEBUG
-  std::string new_filename = path + ".lexer_out";
-  debug_lexer_file = std::ofstream(new_filename);
+  debug_lexer_file = std::ofstream(path + ".lexer_out");
 #endif
   std::ifstream file(path, std::ios::in | std::ios::binary);
-  if (!file.is_open()) {
-    throw std::runtime_error("Failed to open file at path: " + path);
-  }
-  std::stringstream ss;
-  ss << file.rdbuf();
-  file_source = ss.str();
+  if (!file.is_open()) throw new std::runtime_error("Failed to open file at path: " + path);
+  file_source = file_source = std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
   this->last = lex_new();
 }
 
 TokenStream::~TokenStream() {
 #if _DEBUG
-  debug_lexer_file.flush();
-  debug_lexer_file.close();
+  debug_lexer_file.close(); // Just in case
 #endif
 }
 
 Token TokenStream::next() {
-  Token ret = this->last;
-  if (ret.type == Token::Type::TOKEN_EOF) { return ret; } // EOF
-  this->last = lex_new();
-#if _DEBUG
-  std::string ret_str = "[" + token_type_to_string(ret.type) + ":" + std::to_string(ret.line) + ":" + std::to_string(ret.column) + "]: " + std::string(ret.value) + "\n";
-  debug_lexer_file.write(ret_str.c_str(), ret_str.size());
-  debug_lexer_file.flush();
-#endif
-  return ret;
+  #if _DEBUG
+    std::string ret_str = "[" + token_type_to_string(this->last.type) + ":" + std::to_string(this->last.line) + ":" + std::to_string(this->last.column) + "]: " + std::string(this->last.value) + "\n";
+    debug_lexer_file.write(ret_str.c_str(), ret_str.size()).flush();
+  #endif
+  return (this->last = (this->last.type == Token::Type::TOKEN_EOF ? this->last : lex_new() ));
 }
 
 Token TokenStream::peek() {
@@ -66,48 +56,34 @@ Token TokenStream::lex_new() {
     file_source[file_index] == '\r' || 
     file_source[file_index] == '/'
   )) {
-    switch (file_source[file_index]) {
-    case ' ':
-    case '\t':
-      column++;
-      break;
-    case '\n':
-      line++;
-      break;
-    case '\r':
-      column = 1;
-      break;
-    case '/':
-      if (file_index < file_source.size() - 1) {
-        if (file_source[file_index + 1] == '/') {
-          while (file_index < file_source.size() && file_source[file_index] != '\n') {
-            file_index++;
-          }
-          line++;
-          column = 1;
-        } else if (file_source[file_index + 1] == '*') {
-          while (file_index < file_source.size() - 2 && (file_source[file_index] != '*' || file_source[file_index + 1] != '/')) {
-            if (file_source[file_index] == '\r') {
-              column = 1;
-          	} else if (file_source[file_index] == '\n') {
-              line++;
-            }
-            column++;
-            file_index++;
-          }
-          file_index += 2;
-          column += 2;
-        }
+  switch (file_source[file_index]) {
+  case ' ':
+  case '\t': column++;  break;
+  case '\r': column = 1;break;
+  case '\n': line++;    break;
+  case '/':
+    if (file_index >= file_source.size() - 1) throw new std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Unknown / at the end of the file");
+    if (file_source[file_index + 1] == '/') {
+      while (file_index < file_source.size() && file_source[file_index] != '\n') file_index++;
+      line++; column = 1;
+    } else if (file_source[file_index + 1] == '*') {
+      bool found_end = false;
+      while(file_index < file_source.size() - 2 && !found_end) {
+        if (file_source[file_index] == '\r') column = 1;
+      	else if (file_source[file_index] == '\n') line++;
+        else if((file_source[file_index] != '*' && file_source[file_index + 1] != '/')) found_end = true;
+        column++; file_index++;
       }
-      break;
-    default:
-      break;
-    }
-    file_index++;
+      if(!found_end) throw new std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Unterminated multiline comment");
+      file_index += 2;column += 2;
+    } else throw new std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Unknown or misplaced /");
+    break; // Useless break but i'll keep it lol
+    default: 
+    break;
   }
-  if (file_index >= file_source.size() || file_source[file_index] == 0) {
-    return Token(Token::Type::TOKEN_EOF, "", line, column);
+  file_index++;
   }
+  if (file_index >= file_source.size() || file_source[file_index] == 0) return Token(Token::Type::TOKEN_EOF, "", line, column);
   switch (file_source[file_index]) {
   case '(': return Token(Token::Type::TOKEN_OPAREN, std::string_view(&file_source[file_index++], 1), line, column++); 
   case ')': return Token(Token::Type::TOKEN_CPAREN, std::string_view(&file_source[file_index++], 1), line, column++);
@@ -133,11 +109,7 @@ Token TokenStream::lex_new() {
   case '.':
   case ';':
   case '`':
-  case '~':
-    return Token(Token::Type::TOKEN_SPECIAL, std::string_view(&file_source[file_index++], 1), line, column++);
-  case '"':
-  case '\'':
-    return lex_string();
+  case '~': return Token(Token::Type::TOKEN_SPECIAL, std::string_view(&file_source[file_index++], 1), line, column++);
   case '0':
   case '1':
   case '2':
@@ -147,80 +119,44 @@ Token TokenStream::lex_new() {
   case '6':
   case '7':
   case '8':
-  case '9':
-    return lex_number();
-  case '#':
-    return lex_preprocessor();
-  default:
-    return lex_identifier();
+  case '9':  return lex_number();
+  case '"':
+  case '\'': return lex_string();
+  case '#':  return lex_preprocessor();
+  default:   return lex_identifier();
   }
 }
 
 Token TokenStream::lex_number() {
-  size_t start = file_index;
-  size_t start_column = column;
-  while (file_index < file_source.size() && IsNumber(file_source[file_index])) {
-    file_index++;
-    column++;
-  }
+  size_t start = file_index, start_column = column;
+  while (file_index < file_source.size() && Utils::IsNumber(file_source[file_index])) { file_index++; column++; }
   return Token(Token::Type::TOKEN_NUMBER, std::string_view(&file_source[start], file_index - start), line, start_column);
 }
 
 Token TokenStream::lex_string() {
-  size_t start = file_index;
-  size_t start_column = column;
-  char string_type = file_source[file_index++];
-  column++;
+  size_t start = file_index, start_column = column;
+  char string_type = file_source[file_index++]; column++;
   while (file_index < file_source.size()) {
-    char current_char = file_source[file_index++];
-    column++;
-    if (current_char == '\n') {
-      throw std::runtime_error("Lexer error, line " + std::to_string(line) + ", column " + std::to_string(column) + ": Unterminated string");
-    }
-    if (current_char == string_type) {
-      if (string_type == '\'' && file_index - start > 3) {
-        throw std::runtime_error("Lexer error, line " + std::to_string(line) + ", column " + std::to_string(column) + ": single quoted string cannot be longer than 1 character");
-      }
+    char current_char = file_source[file_index++]; column++;
+    if (current_char == '\n') { throw new std::runtime_error("Lexer error, line " + std::to_string(line) + ", column " + std::to_string(column) + ": Unterminated string"); }
+    else if (current_char == string_type) {
+      if (string_type == '\'' && file_index - start > 3) throw new std::runtime_error("Lexer error, line " + std::to_string(line) + ", column " + std::to_string(column) + ": single quoted string cannot be longer than 1 character");
       break;
-    }
-    if (current_char == '\\' && file_index < file_source.size()) {
-      file_index++;
-      column++;
-    }
+    } 
+    else if (current_char == '\\' && file_index < file_source.size()) { file_index++; column++; }
   }
   return Token(Token::Type::TOKEN_STRING, std::string_view(&file_source[start], file_index - start), line, start_column);
 }
 
 Token TokenStream::lex_identifier() {
-  size_t start_index = file_index;
-  size_t start_column = column;
-  while (file_index < file_source.size() && (this->IsAlphaNumeric(file_source[file_index]) || file_source[file_index] == '_')) {
-    file_index++;
-    column++;
-  }
+  size_t start_index = file_index, start_column = column;
+  while (file_index < file_source.size() && (Utils::IsAlphaNumeric(file_source[file_index]) || file_source[file_index] == '_')) { file_index++; column++; }
   return Token(Token::Type::TOKEN_IDENTIFIER, std::string_view(&file_source[start_index], file_index - start_index), line, start_column);
 }
 
 Token TokenStream::lex_preprocessor() {
-  if(this->last.line == this->line) {
-    throw std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Preprocessor directive must be on a new line");
-  }
+  if(this->last.line == this->line) throw new std::runtime_error("[Lexer error " + std::to_string(line) + ":" + std::to_string(column) + "]: Preprocessor directive must be on a new line");
   size_t start_index = file_index;
-  size_t start_column = column;
-  while (file_index < file_source.size() && file_source[file_index] != '\n') {
-    file_index++;
-    column++;
-  } 
-  std::string_view view = std::string_view(&file_source[start_index], file_index - start_index - ((file_source[file_index] == '\n' || file_source[file_index] == '\r') ? 1 : 0));
-  return Token(Token::Type::TOKEN_PREPROCESSOR, view, line, start_column);
+  while (file_index < file_source.size() && file_source[file_index] != '\n') {file_index++; column++;} 
+  return Token(Token::Type::TOKEN_PREPROCESSOR, std::string_view(&file_source[start_index], file_index - start_index - ((file_source[file_index] == '\n' || file_source[file_index] == '\r') ? 1 : 0)), line, column);
 }
-
-bool TokenStream::IsSpecialChar(char c) {
-  static const std::string special_chars = "!\"$%&'*+,-./:;=?@\\^|~";
-  return special_chars.find(c) != std::string::npos;
-}
-bool TokenStream::IsSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
-bool TokenStream::IsNumber(char c) { return c >= '0' && c <= '9'; }
-bool TokenStream::IsLetter(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
-bool TokenStream::IsAlphaNumeric(char c) { return IsLetter(c) || IsNumber(c); }
-bool TokenStream::IsNewLine(char c) { return c == '\n'; }

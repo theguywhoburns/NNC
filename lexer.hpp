@@ -1,16 +1,6 @@
 #pragma once
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <limits>
-#include <cstdint>
-#include <unordered_map>
-#include <cassert>
-#include <string>
-#include <string_view>
+#include <Utils.hpp>
 
 class Token {
 public:
@@ -57,13 +47,7 @@ private:
   Token lex_string();
   Token lex_identifier();
   Token lex_preprocessor();
-
-  bool IsSpecialChar(char c);
-  bool IsSpace(char c);
-  bool IsNumber(char c);
-  bool IsLetter(char c);
-  bool IsAlphaNumeric(char c);
-  bool IsNewLine(char c);
+  
 
 #if _DEBUG
   std::ofstream debug_lexer_file;
