@@ -1,0 +1,15 @@
+define_ast_type("constant","dynamic")
+#вот это тестовый препроцессор
+// для добавления силой(не обязательно)
+// add_child_to_ast(ast, {})
+
+syntax_rule(variable_declaration_assignment) {
+	/*Ну по сути вот*/
+
+	/*
+		Так вот
+	*/
+	case(decl) syntax(identifier, =, {identifier, constant})
+	case(assign) syntax(identifier, {=, +=, -=, *=, /=, %=}, {identifier, constant})
+	case(assign) subcase(self) syntax(identifier, {++, --}) or syntax({++, --}, identifier)
+}

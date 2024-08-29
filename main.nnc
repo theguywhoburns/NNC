@@ -28,7 +28,7 @@ class Hello {
 int main() {
 	// So each value/object will have it's type stored in it's header
 	printf("Hello World!\n");
-	nstd.print("Hello {}", "World");
+	nstd.print("Hello {}","World");
 	nstd.println();
 
 	return 0;
